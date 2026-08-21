@@ -1,476 +1,183 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState, useEffect } from "react";
 
+// ==========================================
+// COMPONENT 1: SearchBar
+// ==========================================
+const SearchBar = ({ onSearch, loading }) => {
+  const [inputValue, setInputValue] = useState("");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (inputValue.trim()) {
+      onSearch(inputValue.trim());
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="mb-4">
+      <div className="input-group input-group-lg shadow-sm">
+        <input
+          type="text"
+          className="form-control"
+          placeholder="Enter a movie title (e.g., Inception)..."
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          disabled={loading}
+        />
+        <button 
+          type="submit" 
+          className="btn btn-primary px-4" 
+          disabled={loading || !inputValue.trim()}
+        >
+          {loading ? "Searching..." : "Search"}
+        </button>
+      </div>
+    </form>
+  );
+};
+
+// ==========================================
+// COMPONENT 2: MovieCard
+// ==========================================
+const MovieCard = ({ movie }) => {
+  const posterUrl = movie.Poster !== "N/A" ? movie.Poster : "https://via.placeholder.com/300x450?text=No+Poster";
+
+  return (
+    <div className="col-12 col-sm-6 col-md-4 col-lg-3 mb-4">
+      <div className="card h-100 border-0 shadow-sm custom-card-hover">
+        <img
+          src={posterUrl}
+          alt={movie.Title}
+          className="card-img-top"
+          style={{ height: "350px", objectFit: "cover" }}
+        />
+        <div className="card-body d-flex flex-column">
+          <h6 className="card-title fw-bold text-truncate" title={movie.Title}>
+            {movie.Title}
+          </h6>
+          <p className="card-text text-muted small mb-3">
+            <span>📅 {movie.Year}</span> | <span className="text-capitalize">🎞️ {movie.Type}</span>
+          </p>
+          <a
+            href={`https://www.imdb.com/title/${movie.imdbID}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-outline-primary btn-sm mt-auto"
+          >
+            More Details
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
+// MAIN COMPONENT: App
+// ==========================================
 function App() {
-  const [city, setCity] = useState("Delhi");
-  const [search, setSearch] = useState("");
-  const [weather, setWeather] = useState(null);
-  const [forecast, setForecast] = useState([]);
+  // State Management
+  const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  
-  const searchInputRef = useRef(null);
+  // ⚠️ IMPORTANT: Put your ACTIVATED OMDb API key here
+  const API_KEY = "5dce4c95"; 
 
-  
-  const API_KEY = "178a95b33b230fb732b5c95e894478d3";
+  // Page Title Side Effect
+  useEffect(() => {
+    document.title = "React Movie Finder";
+  }, []);
 
-  const getWeather = async (cityName) => {
-    if (!cityName || !cityName.trim()) {
-      setError("Please enter a city name.");
-      return;
-    }
-
+  // Fetch API Logic
+  const searchMovies = async (searchTerm) => {
     setLoading(true);
     setError("");
+    setMovies([]);
 
     try {
+      const response = await fetch(
+        `https://www.omdbapi.com/?apikey=${API_KEY}&s=${encodeURIComponent(searchTerm)}`
+      );
       
-      const weatherUrl =
-        "https://api.openweathermap.org/data/2.5/weather" +
-        "?q=" +
-        encodeURIComponent(cityName) +
-        "&appid=" +
-        API_KEY +
-        "&units=metric";
+      const data = await response.json();
 
-      const weatherResponse = await fetch(weatherUrl);
-
-      if (!weatherResponse.ok) {
-        if (weatherResponse.status === 401) {
-          throw new Error(
-            "Invalid API key. Please check your OpenWeather API key."
-          );
-        }
-
-        if (weatherResponse.status === 404) {
-          throw new Error(
-            "City not found. Please enter a valid city name."
-          );
-        }
-
-        throw new Error("Weather data could not be loaded.");
+      if (data.Response === "True") {
+        setMovies(data.Search);
+      } else {
+        setError(data.Error || "No movies found. Try another search.");
       }
-
-      const weatherData = await weatherResponse.json();
-
-      
-      const forecastUrl =
-        "https://api.openweathermap.org/data/2.5/forecast" +
-        "?q=" +
-        encodeURIComponent(cityName) +
-        "&appid=" +
-        API_KEY +
-        "&units=metric";
-
-      const forecastResponse = await fetch(forecastUrl);
-
-      if (!forecastResponse.ok) {
-        throw new Error("Forecast data could not be loaded.");
-      }
-
-      const forecastData = await forecastResponse.json();
-
-      setWeather(weatherData);
-
-    
-      const daily = [];
-
-      forecastData.list.forEach((item) => {
-        const dateObject = new Date(item.dt * 1000);
-
-        const date = dateObject.toLocaleDateString("en-IN", {
-          weekday: "short",
-          day: "numeric",
-          month: "short",
-        });
-
-        const alreadyExists = daily.some(
-          (day) => day.date === date
-        );
-
-        if (!alreadyExists) {
-          daily.push({
-            date: date,
-            temp: Math.round(item.main.temp),
-            humidity: item.main.humidity,
-            description: item.weather[0].description,
-            icon: item.weather[0].icon,
-          });
-        }
-      });
-
-      setForecast(daily.slice(0, 5));
     } catch (err) {
-      setWeather(null);
-      setForecast([]);
-      setError(err.message);
+      setError("Failed to fetch data. Please check your internet connection.");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    getWeather(city);
-
-    
-    if (searchInputRef.current) {
-      searchInputRef.current.focus();
-    }
-  }, [city]);
-
-  const handleSearch = (event) => {
-    event.preventDefault();
-
-    const newCity = search.trim();
-
-    if (!newCity) {
-      setError("Please enter a city name.");
-      return;
-    }
-
-    setCity(newCity);
-    setSearch("");
-  };
-
   return (
-    <div className="min-vh-100 bg-primary-subtle py-4">
-
-      <div className="container">
-
-        {/* Header */}
-        <div className="text-center mb-4">
-
-          <h1 className="fw-bold text-primary">
-            🌤️ Live Weather App
-          </h1>
-
-          <p className="text-muted">
-            Search any city and check live weather
-          </p>
-
+    <div className="bg-light min-vh-100 d-flex flex-column">
+      
+      {/* Header */}
+      <header className="bg-primary text-white py-3 shadow-sm">
+        <div className="container d-flex align-items-center">
+          <h2 className="m-0 fw-bold">🎬 MovieFinder</h2>
         </div>
+      </header>
 
-
-        {/* Search */}
+      {/* Main Content */}
+      <main className="container flex-grow-1 py-5">
         <div className="row justify-content-center mb-4">
-
-          <div className="col-12 col-md-8 col-lg-6">
-
-            <form onSubmit={handleSearch}>
-
-              <div className="input-group input-group-lg shadow-sm">
-
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  className="form-control"
-                  placeholder="🔍 Search city..."
-                  value={search}
-                  onChange={(event) =>
-                    setSearch(event.target.value)
-                  }
-                />
-
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={loading}
-                >
-                  {loading ? "Loading..." : "Search"}
-                </button>
-
-              </div>
-
-            </form>
-
+          <div className="col-md-8 text-center">
+            <h1 className="fw-bold mb-3">Find Your Favorite Movies</h1>
+            <p className="text-muted mb-4">Search millions of movies, series, and documentaries.</p>
+            
+            {/* Modular Search Bar */}
+            <SearchBar onSearch={searchMovies} loading={loading} />
           </div>
-
         </div>
 
-
-        {/* Error */}
-        {error && (
-          <div className="row justify-content-center mb-4">
-
-            <div className="col-12 col-md-8 col-lg-6">
-
-              <div className="alert alert-danger text-center shadow-sm">
-                ⚠️ {error}
-              </div>
-
-            </div>
-
-          </div>
-        )}
-
-
-        {/* Loading */}
+        {/* Loading Indicator */}
         {loading && (
           <div className="text-center my-5">
-
-            <div
-              className="spinner-border text-primary"
-              role="status"
-              style={{
-                width: "4rem",
-                height: "4rem",
-              }}
-            >
-              <span className="visually-hidden">
-                Loading...
-              </span>
+            <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem' }}>
+              <span className="visually-hidden">Loading...</span>
             </div>
-
-            <p className="mt-3 fw-bold text-primary">
-              Fetching weather...
-            </p>
-
+            <p className="mt-3 text-muted">Fetching movies...</p>
           </div>
         )}
 
-
-        {/* Current Weather */}
-        {!loading && weather && (
-          <>
-
-            <div className="row justify-content-center mb-5">
-
-              <div className="col-12 col-md-8 col-lg-6">
-
-                <div className="card border-0 shadow-lg rounded-4">
-
-                  <div className="card-body text-center p-4">
-
-                    {/* City */}
-                    <div className="d-flex justify-content-between align-items-center">
-
-                      <div className="text-start">
-
-                        <h2 className="fw-bold mb-0">
-                          {weather.name}
-                        </h2>
-
-                        <small className="text-muted">
-                          {weather.sys.country}
-                        </small>
-
-                      </div>
-
-                      <span className="badge bg-success rounded-pill px-3 py-2">
-                        ● Live
-                      </span>
-
-                    </div>
-
-
-                    {}
-                    <img
-                      src={
-                        "https://openweathermap.org/img/wn/" +
-                        weather.weather[0].icon +
-                        "@4x.png"
-                      }
-                      alt={weather.weather[0].description}
-                      width="150"
-                      height="150"
-                    />
-
-
-                    {}
-                    <h1 className="display-1 fw-bold text-primary mb-0">
-                      {Math.round(weather.main.temp)}°C
-                    </h1>
-
-
-                    {}
-                    <h4 className="text-capitalize text-secondary mt-2">
-                      {weather.weather[0].description}
-                    </h4>
-
-
-                    {/* Details */}
-                    <div className="row g-3 mt-3">
-
-                      <div className="col-6">
-
-                        <div className="bg-light rounded-4 p-3">
-
-                          <div className="fs-2">
-                            💧
-                          </div>
-
-                          <small className="text-muted">
-                            Humidity
-                          </small>
-
-                          <h5 className="fw-bold mb-0">
-                            {weather.main.humidity}%
-                          </h5>
-
-                        </div>
-
-                      </div>
-
-
-                      <div className="col-6">
-
-                        <div className="bg-light rounded-4 p-3">
-
-                          <div className="fs-2">
-                            🌡️
-                          </div>
-
-                          <small className="text-muted">
-                            Feels Like
-                          </small>
-
-                          <h5 className="fw-bold mb-0">
-                            {Math.round(
-                              weather.main.feels_like
-                            )}
-                            °C
-                          </h5>
-
-                        </div>
-
-                      </div>
-
-
-                      <div className="col-6">
-
-                        <div className="bg-light rounded-4 p-3">
-
-                          <div className="fs-2">
-                            💨
-                          </div>
-
-                          <small className="text-muted">
-                            Wind
-                          </small>
-
-                          <h5 className="fw-bold mb-0">
-                            {weather.wind.speed} m/s
-                          </h5>
-
-                        </div>
-
-                      </div>
-
-
-                      <div className="col-6">
-
-                        <div className="bg-light rounded-4 p-3">
-
-                          <div className="fs-2">
-                            📊
-                          </div>
-
-                          <small className="text-muted">
-                            Pressure
-                          </small>
-
-                          <h5 className="fw-bold mb-0">
-                            {weather.main.pressure} hPa
-                          </h5>
-
-                        </div>
-
-                      </div>
-
-                    </div>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-            </div>
-
-
-            {}
-            <div className="text-center mb-4">
-
-              <h2 className="fw-bold">
-                📅 5-Day Forecast
-              </h2>
-
-              <p className="text-muted">
-                Forecast for {weather.name}
-              </p>
-
-            </div>
-
-
-            {}
-            <div className="row g-3">
-
-              {forecast.map((day, index) => (
-
-                <div
-                  className="col-12 col-sm-6 col-lg"
-                  key={index}
-                >
-
-                  <div className="card h-100 border-0 shadow-sm rounded-4">
-
-                    <div className="card-body text-center p-4">
-
-                      <h6 className="fw-bold">
-                        {day.date}
-                      </h6>
-
-                      <img
-                        src={
-                          "https://openweathermap.org/img/wn/" +
-                          day.icon +
-                          "@2x.png"
-                        }
-                        alt={day.description}
-                        width="90"
-                        height="90"
-                      />
-
-                      <h3 className="fw-bold text-primary">
-                        {day.temp}°C
-                      </h3>
-
-                      <p className="text-capitalize text-muted">
-                        {day.description}
-                      </p>
-
-                      <hr />
-
-                      <small>
-                        💧 Humidity: {day.humidity}%
-                      </small>
-
-                    </div>
-
-                  </div>
-
-                </div>
-
-              ))}
-
-            </div>
-
-          </>
+        {/* Error Message */}
+        {error && !loading && (
+          <div className="alert alert-danger text-center shadow-sm" role="alert">
+            <strong>Oops!</strong> {error}
+          </div>
         )}
 
+        {/* Movie Results Grid */}
+        {!loading && !error && movies.length > 0 && (
+          <div>
+            <h4 className="mb-4 fw-bold">Search Results ({movies.length})</h4>
+            <div className="row">
+              {movies.map((movie) => (
+                <MovieCard key={movie.imdbID} movie={movie} />
+              ))}
+            </div>
+          </div>
+        )}
 
-        {/* Footer */}
-        <div className="text-center mt-5">
+        {/* Empty State / Initial Load */}
+        {!loading && !error && movies.length === 0 && (
+          <div className="text-center my-5 py-5 text-muted">
+            <h1 className="display-1 opacity-50">🍿</h1>
+            <h4>Waiting for your search...</h4>
+          </div>
+        )}
+      </main>
 
-          <p className="text-muted">
-           whether app made by guvii      
-           usse bootstrap css  technologies
-          </p>
-
-        </div>
-
-      </div>
-
+      {/* Footer */}
+      <footer className="bg-dark text-light text-center py-3 mt-auto">
+        <p className="m-0 small">&copy; 2026 MovieFinder App. Built with React & OMDb API.</p>
+      </footer>
     </div>
   );
 }
